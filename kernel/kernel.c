@@ -25,6 +25,7 @@ volatile int key_head = 0;
 volatile int key_tail = 0;
 
 volatile unsigned short* vga;
+int vga_pos = 0;  // single position counter
 int cx;
 int cy;
 char input_buf[256];
@@ -70,21 +71,44 @@ void draw_taskbar() {
 
 void scroll() {
     int i;
-    for (i = 0; i < 80*23; i++)
+    for (i = 0; i < 80*22; i++)   // ← 22 not 23
         vga[i] = vga[i + 80];
-    for (i = 80*23; i < 80*24; i++)
+    for (i = 80*22; i < 80*23; i++) // ← 22/23 not 23/24
         vga[i] = mkchar(' ', 0, 7);
-    cy = 23;
+    cy = 22;                        // ← 22 not 23
 }
+
+// Linus style - simple, no tricks
+
 
 void putc(char c, unsigned char fg, unsigned char bg) {
-    if (c == '\n') { cx = 0; cy++; if (cy >= 24) scroll(); return; }
-    if (cy >= 24) scroll();
-    vga[cy * 80 + cx] = mkchar(c, fg, bg);
-    cx++;
-    if (cx >= 80) { cx = 0; cy++; if (cy >= 24) scroll(); }
+    if (c == '\n') {
+        vga_pos = ((vga_pos / 80) + 1) * 80;
+        if (vga_pos >= 80*24) {
+            // scroll
+            int i;
+            for (i = 0; i < 80*23; i++)
+                vga[i] = vga[i+80];
+            for (i = 80*23; i < 80*24; i++)
+                vga[i] = mkchar(' ', 0, 7);
+            vga_pos = 80*23;
+        }
+        cx = 0; cy = vga_pos / 80;
+        return;
+    }
+    vga[vga_pos++] = mkchar(c, fg, bg);
+    cx = vga_pos % 80;
+    cy = vga_pos / 80;
+    if (vga_pos >= 80*24) {
+        int i;
+        for (i = 0; i < 80*23; i++)
+            vga[i] = vga[i+80];
+        for (i = 80*23; i < 80*24; i++)
+            vga[i] = mkchar(' ', 0, 7);
+        vga_pos = 80*23;
+        cx = 0; cy = 23;
+    }
 }
-
 void puts(const char* s, unsigned char fg, unsigned char bg) {
     int i;
     for (i = 0; s[i]; i++) putc(s[i], fg, bg);
@@ -284,15 +308,17 @@ unsigned char bcd_to_bin(unsigned char bcd) {
 
 
 void print_prompt() {
+    vga_pos = cy * 80 + cx;  // ← sync vga_pos!
     draw_taskbar();
     puts("C:\\QRTOS> ", 0, 7);
     update_cursor();
 }
 
+
 void draw_boot_screen() {
     int i;
-    for (i=0; i<80*25; i++) vga[i]=mkchar(' ',0,7);
-    cx=0; cy=0;
+    vga_pos = 0;  // ← add this!
+    cx = 0; cy = 0;
 
     putln("  QRTOS",1,7);
     putln("  Qourtra Software Foundation | v1 x86 2026",8,7);
@@ -307,46 +333,6 @@ void draw_boot_screen() {
     putln("  Welcome to QRTOS! Type 'help'",0,7);
 }
 
-void kernel_main() {
-    vga = (volatile unsigned short*)0xB8000;
-    cx = 0;
-    cy = 0;
-    input_len = 0;
-    shift_pressed = 0;
-    draw_boot_screen();
-    keyboard_init();
-    
-
-    // NO cls() here! just go straight to prompt
-    print_prompt();
-
-    while (1) {
-        char c = read_key();
-        if (!c) continue;
-        draw_taskbar();
-
-        if (c == '\n') {
-            input_buf[input_len] = '\0';
-            putc('\n', 0, 7);
-            if (input_len > 0) run_command(input_buf);
-            input_len = 0;
-            print_prompt();
-        } else if (c == '\b') {
-            if (input_len > 0) {
-                input_len--;
-                if (cx > 0) cx--;
-                vga[cy * 80 + cx] = mkchar(' ', 0, 7);
-                update_cursor();
-            }
-        } else {
-            if (input_len < 255) {
-                input_buf[input_len++] = c;
-                putc(c, 0, 7);
-                update_cursor();
-            }
-        }
-    }
-}
 
 static int cmd_streq(const char* a, const char* b) {
     int i = 0;
@@ -541,11 +527,11 @@ void shell_reboot() {
 }
 
 void shell_help() {
-    putln("  QRTOS v1 Commands:", 1, 7);
-    putln("  help2 sysinfo ram cpu clock", 8, 7);
-    putln("  taskmgr version qsf color", 8, 7);
-    putln("  calc N op N | echo <text>", 8, 7);
-    putln("  reboot clear | help2=FS cmds", 8, 7);
+    putln("  QRTOS v1 Commands:", 4, 7);
+    putln("  help2 sysinfo ram cpu clock", 4, 7);
+    putln("  taskmgr version qsf color", 4, 7);
+    putln("  calc N op N | echo <text>", 4, 7);
+    putln("  reboot clear | help2=FS cmds", 4, 7);
 }
 
 void shell_help2() {
@@ -639,13 +625,23 @@ void shell_restore(const char* name) {
     else { puts("|  Restored: ", 2, 7); putln(name, 0, 7); }
 }
 void run_command(char* cmd) {
-    putln("TEST", 1, 7);  // ← add this line temporarily
+    // RAW VGA TEST - bypasses putln completely
+    vga[0] = mkchar('R', 4, 7);
+    vga[1] = mkchar('U', 4, 7);
+    vga[2] = mkchar('N', 4, 7);
+    
+    // show cx and cy values directly
+    vga[4] = mkchar('0' + cx/10, 2, 7);
+    vga[5] = mkchar('0' + cx%10, 2, 7);
+    vga[6] = mkchar(',', 0, 7);
+    vga[7] = mkchar('0' + cy/10, 2, 7);
+    vga[8] = mkchar('0' + cy%10, 2, 7);
     // rest of code...
     // manual inline comparisons - no function call
     char* p;
     
     p = "help";
-    if (cmd[0]==p[0]&&cmd[1]==p[1]&&cmd[2]==p[2]&&cmd[3]==p[3]&&cmd[4]=='\0') { shell_help(); return; }
+    if (cmd[0]==p[0]&&cmd[1]==p[1]&&cmd[2]==p[2]&&cmd[3]==p[3]&&cmd[4]=='\0') { shell_help();return; }
     if (cmd[0]=='h'&&cmd[1]=='e'&&cmd[2]=='l'&&cmd[3]=='p'&&cmd[4]=='2') { shell_help2(); return; }
     p = "clear";
     if (cmd[0]=='c'&&cmd[1]=='l'&&cmd[2]=='e'&&cmd[3]=='a'&&cmd[4]=='r'&&cmd[5]=='\0') { cls(); return; }
@@ -681,3 +677,41 @@ void run_command(char* cmd) {
     putln("|  Type 'help' for commands.",8,7);
 }
 
+void kernel_main() {
+    vga = (volatile unsigned short*)0xB8000;
+    cx = 0;
+    cy = 0;
+    input_len = 0;
+    shift_pressed = 0;
+    draw_boot_screen();
+    keyboard_init();
+
+    print_prompt();
+
+    while (1) {
+        char c = read_key();
+        if (!c) continue;
+
+        if (c == '\n') {
+            input_buf[input_len] = '\0';
+            putc('\n', 0, 7);
+            if (input_len > 0) run_command(input_buf);
+		input_len = 0;
+		putc('\n', 0, 7);  // ← gap between output and prompt
+		print_prompt();
+        } else if (c == '\b') {
+            if (input_len > 0) {
+                input_len--;
+                if (cx > 0) cx--;
+                vga[cy * 80 + cx] = mkchar(' ', 0, 7);
+                update_cursor();
+            }
+        } else {
+            if (input_len < 255) {
+                input_buf[input_len++] = c;
+                putc(c, 0, 7);
+                update_cursor();
+            }
+        }
+    }
+}
