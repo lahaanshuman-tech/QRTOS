@@ -14,13 +14,17 @@ echo "[OK] Kernel compiled"
 
 gcc -m32 -ffreestanding -fno-pie -nostdlib -nostdinc \
     -fno-builtin -fno-stack-protector -Os -I. \
+    -c graphics/graphics.c -o graphics/graphics.o
+echo "[OK] Graphics Compiled"
+gcc -m32 -ffreestanding -fno-pie -nostdlib -nostdinc \
+    -fno-builtin -fno-stack-protector -Os -I. \
     -c fs/fas32q.c -o fs/fas32q.o
 echo "[OK] FAS32Q compiled"
 
 ld -m elf_i386 -T kernel/linker.ld \
    -o kernel/kernel.bin \
    --oformat binary \
-   kernel/entry.o kernel/kernel.o fs/fas32q.o
+   kernel/entry.o kernel/kernel.o fs/fas32q.o graphics/graphics.o
 echo "[OK] Kernel linked"
 
 echo "Kernel size:"
