@@ -10,7 +10,7 @@ start:
     mov sp, 0x7C00
     sti
 
-    mov ax, 0x0003
+    mov ax, 0x0013
     int 0x10
 
     mov si, msg_load

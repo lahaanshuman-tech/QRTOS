@@ -1,7 +1,7 @@
 #include "graphics.h"
 
 // ── Framebuffer ────────────────────────────
-static unsigned char* fb = (unsigned char*)VGA_MEMORY;
+static unsigned char* fb;
 
 // ── Simple 6x8 bitmap font ─────────────────
 // Each char = 8 bytes, each byte = 1 row of 6 pixels
@@ -100,15 +100,9 @@ static const unsigned char font[][8] = {
 
 // ── VGA mode switch ────────────────────────
 void gfx_init() {
-    // switch to mode 13h (320x200 256 colors)
-    __asm__ volatile(
-        "mov $0x13, %%ax\n"
-        "int $0x10\n"
-        : : : "ax"
-    );
-    fb = (unsigned char*)VGA_MEMORY;
+    fb = (unsigned char*)0xA0000;  // set at runtime!
+    // NO int 0x10 here - bootloader already did it
 }
-
 // ── Core drawing ───────────────────────────
 void gfx_pixel(int x, int y, unsigned char color) {
     if (x < 0 || x >= VGA_WIDTH || y < 0 || y >= VGA_HEIGHT) return;
