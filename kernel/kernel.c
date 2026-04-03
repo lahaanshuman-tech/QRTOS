@@ -409,9 +409,9 @@ void kernel_main() {
     for (d = 0; d < 400000000; d++);
 
     term_clear();
-    ui_draw_taskbar();
+    term_cy = 0;
+    term_cx = 0;
     term_prompt();
-
     while (1) {
         char c = read_key();
         if (!c) continue;
