@@ -10,7 +10,8 @@ start:
     mov sp, 0x7C00
     sti
 
-    mov ax, 0x0013
+    ; Text mode for bootloader messages
+    mov ax, 0x0003
     int 0x10
 
     mov si, msg_load
@@ -21,7 +22,7 @@ start:
     int 0x13
 
     mov ah, 0x02
-    mov al, 17
+    mov al, 25
     mov ch, 0
     mov cl, 2
     mov dh, 0
@@ -31,7 +32,7 @@ start:
     jc disk_error
 
     mov ah, 0x02
-    mov al, 18
+    mov al, 20
     mov ch, 1
     mov cl, 1
     mov dh, 0
@@ -42,6 +43,10 @@ start:
 
     mov si, msg_ok
     call print16
+
+    ; Switch to graphics mode 13h NOW (before protected mode)
+    mov ax, 0x0013
+    int 0x10
 
     cli
 
@@ -138,7 +143,7 @@ init_pm:
     hlt
 
 msg_load  db 'QRTOS Bootloader v1 - Loading kernel...', 13, 10, 0
-msg_ok    db 'Kernel loaded! Starting QRTOS...', 13, 10, 0
+msg_ok    db 'Kernel loaded! Switching to graphics...', 13, 10, 0
 msg_err   db 'ERROR: First read failed!', 13, 10, 0
 msg_err2  db 'ERROR: Second read failed!', 13, 10, 0
 

@@ -401,6 +401,14 @@ void run_command(char* cmd) {
 // ── Kernel entry ───────────────────────────
 void kernel_main() {
     gfx_init();
+    gfx_init();
+    // direct framebuffer write test
+    unsigned char* test_fb = (unsigned char*)0xA0000;
+    test_fb[0] = 15;   // white pixel at 0,0
+    test_fb[1] = 15;
+    test_fb[2] = 15;
+    test_fb[3] = 15;
+    test_fb[4] = 15;
     term_init();
     ui_draw_boot_screen();
     keyboard_init();
@@ -409,8 +417,10 @@ void kernel_main() {
     for (d = 0; d < 400000000; d++);
 
     term_clear();
-    term_cy = 0;
     term_cx = 0;
+    term_cy = 0;
+    // direct test
+    gfx_str(0, 0, "HELLO WORLD", 15, 0);
     term_prompt();
     while (1) {
         char c = read_key();
